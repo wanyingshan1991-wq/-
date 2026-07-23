@@ -7,7 +7,8 @@ from lark_client import LarkClient
 @dataclass(frozen=True)
 class AdjustmentArea:
     sheet_name: str
-    column: str
+    start_column: str
+    end_column: str
     rows: str
 
 
@@ -19,11 +20,11 @@ ADJUSTMENT_AREA_ROWS = [
 ]
 
 
-def normalize_range(column: str, rows: str) -> str:
+def normalize_range(start_column: str, end_column: str, rows: str) -> str:
     if ":" not in rows:
-        return f"{column}{rows}:{column}{rows}"
+        return f"{start_column}{rows}:{end_column}{rows}"
     start, end = rows.split(":", 1)
-    return f"{column}{start}:{column}{end}"
+    return f"{start_column}{start}:{end_column}{end}"
 
 
 def column_from_index(index: int) -> str:
@@ -37,10 +38,17 @@ def column_from_index(index: int) -> str:
 
 
 def adjustment_areas_for_month(month: int) -> list[AdjustmentArea]:
-    # Based on the current policy revision workbook: 7月 common column is O, 8月 is P.
-    common_column_index = 8 + month
+    # Current workbook layout: common sheets use I:T for 1月:12月;
+    # 商品 is shifted one column left and uses H:S for 1月:12月.
+    common_start_index = 9
+    common_end_index = common_start_index + month - 1
     return [
-        AdjustmentArea(sheet_name, column_from_index(common_column_index + offset), rows)
+        AdjustmentArea(
+            sheet_name,
+            column_from_index(common_start_index + offset),
+            column_from_index(common_end_index + offset),
+            rows,
+        )
         for sheet_name, rows, offset in ADJUSTMENT_AREA_ROWS
     ]
 
@@ -56,7 +64,12 @@ def set_adjustment_area_white(client: LarkClient, spreadsheet_token: str, month:
         sheet_id = ids.get(area.sheet_name)
         if not sheet_id:
             raise RuntimeError(f"Sheet not found: {area.sheet_name}")
-        client.set_background(spreadsheet_token, sheet_id, normalize_range(area.column, area.rows), "#ffffff")
+        client.set_background(
+            spreadsheet_token,
+            sheet_id,
+            normalize_range(area.start_column, area.end_column, area.rows),
+            "#ffffff",
+        )
 
 
 def generate(config: dict[str, Any], month: int | None = None, force_copy: bool = False) -> dict[str, Any]:

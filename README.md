@@ -4,7 +4,7 @@
 
 - 生成 `经营方针修正-X月`
 - 从源月份表格复制新表
-- 设置当月“经营方针调整”区域为白色背景
+- 设置 `1月` 到 `X月` 的“经营方针调整”区域为白色背景
 - 回读校验目标表格和工作表结构
 
 ## 推荐使用方式
@@ -18,15 +18,23 @@
 5. 打开解压后的项目文件夹。
 6. 双击 `first_time_setup.bat`。
 7. 按提示完成配置。
-8. 桌面会出现 `业绩表格生成工具` 快捷方式。
-9. 之后直接双击桌面快捷方式运行。
+8. 桌面会出现 `业绩表格生成工具` 入口。
+9. 之后直接双击桌面入口运行。
+
+如果系统安全策略禁止创建 `.lnk` 快捷方式，工具会自动改为创建：
+
+```text
+业绩表格生成工具.bat
+```
+
+这个 `.bat` 也是桌面入口，可以双击运行。
 
 ### 使用 WorkBuddy/Codex 的人
 
 把 GitHub 链接发给 WorkBuddy/Codex，然后说：
 
 ```text
-请打开这个 GitHub 项目，下载或 clone 到本地，按 README 检查 Python 和 lark-cli，完成飞书授权，然后运行 first_time_setup.bat。配置时请让我粘贴自己的飞书文件夹链接、源表链接，并输入源月份和目标月份。完成后请确认桌面是否出现“业绩表格生成工具”快捷方式。
+请打开这个 GitHub 项目，下载或 clone 到本地，按 README 检查 Python 和 lark-cli，完成飞书授权，然后运行 first_time_setup.bat。配置时请让我粘贴自己的飞书文件夹链接、源表链接，并输入源月份和目标月份。完成后请确认桌面是否出现“业绩表格生成工具”快捷方式或 bat 启动器。
 ```
 
 以后只需要说：
@@ -84,7 +92,7 @@ GXa5fxrfPlL8dDdt0sXct4eJnDc
 
 ## 日常运行
 
-双击桌面快捷方式：
+双击桌面入口：
 
 ```text
 业绩表格生成工具
@@ -145,7 +153,7 @@ python scripts/main.py check
 python scripts/main.py generate-policy --month 8
 ```
 
-创建桌面快捷方式：
+创建桌面入口：
 
 ```text
 create_desktop_shortcut.bat
