@@ -18,26 +18,7 @@ if errorlevel 1 (
   exit /b 1
 )
 
-if not exist "config\config.json" (
-  echo config\config.json was not found.
-  echo Copying config\config.example.json to config\config.json...
-  copy "config\config.example.json" "config\config.json" >nul
-  echo Please review config\config.json, then run this file again.
-  pause
-  exit /b 1
-)
-
-echo.
-set /p TARGET_MONTH=Input target month number, for example 8: 
-if "%TARGET_MONTH%"=="" (
-  echo No month input. Canceled.
-  pause
-  exit /b 1
-)
-
-echo.
-echo Generating policy revision for month %TARGET_MONTH%...
-python "scripts\generate_policy_revision.py" --month %TARGET_MONTH%
+python "scripts\main.py"
 
 echo.
 pause
