@@ -1,4 +1,5 @@
 config/config.json
+config/*.bak
 logs/
 __pycache__/
 *.pyc

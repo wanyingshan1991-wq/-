@@ -2,7 +2,7 @@ import argparse
 import json
 import sys
 
-from config_wizard import ensure_config_exists, load_config, run_config_wizard
+from config_wizard import ensure_config_exists, run_config_wizard, validate_config
 from generators.policy_revision import generate as generate_policy_revision
 from lark_client import LarkClient
 
@@ -43,6 +43,29 @@ def check_environment() -> None:
     print(json.dumps(status, ensure_ascii=False, indent=2))
 
 
+def confirm_policy_generation(config: dict, month: int) -> bool:
+    errors = validate_config(config)
+    if errors:
+        print("")
+        print("配置不完整，请先选择 2. 配置/更新飞书 token。")
+        for error in errors:
+            print(f"- {error}")
+        return False
+
+    policy = config["policy_revision"]
+    source_month = policy.get("source_month") or month - 1
+    source_name = policy.get("source_name") or f"经营方针修正-{source_month}月"
+
+    print("")
+    print("即将执行：")
+    print(f"- 生成表格：经营方针修正-{month}月")
+    print(f"- 源表名称：{source_name}")
+    print(f"- 源表 token：{policy.get('source_token')}")
+    print(f"- 目标文件夹 token：{policy.get('folder_token')}")
+    answer = input("是否继续？输入 Y 继续，其他任意键取消: ").strip().lower()
+    return answer == "y"
+
+
 def menu() -> int:
     while True:
         config = ensure_config_exists()
@@ -59,6 +82,9 @@ def menu() -> int:
 
         if choice == "1":
             month = ask_month(default_month)
+            if not confirm_policy_generation(config, month):
+                print("已取消。")
+                continue
             result = generate_policy_revision(config, month=month)
             print_result(result)
         elif choice == "2":
@@ -92,7 +118,13 @@ def main() -> int:
         return 0
     if args.command == "generate-policy":
         config = ensure_config_exists()
-        result = generate_policy_revision(config, month=args.month, force_copy=args.force_copy)
+        month = args.month or config.get("policy_revision", {}).get("target_month")
+        if not month:
+            month = ask_month()
+        if not confirm_policy_generation(config, month):
+            print("已取消。")
+            return 1
+        result = generate_policy_revision(config, month=month, force_copy=args.force_copy)
         print_result(result)
         return 0
     return menu()

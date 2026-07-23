@@ -9,6 +9,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG_PATH = PROJECT_ROOT / "config" / "config.json"
 EXAMPLE_CONFIG_PATH = PROJECT_ROOT / "config" / "config.example.json"
 
+PLACEHOLDER_MARKERS = ["请", "YOUR_", "<", ">"]
+
 
 def load_config(path: Path = DEFAULT_CONFIG_PATH) -> dict[str, Any]:
     if not path.exists():
@@ -31,7 +33,11 @@ def load_example_config() -> dict[str, Any]:
 
 def ensure_config_exists() -> dict[str, Any]:
     if DEFAULT_CONFIG_PATH.exists():
-        return load_config(DEFAULT_CONFIG_PATH)
+        config = load_config(DEFAULT_CONFIG_PATH)
+        if is_config_valid(config):
+            return config
+        print("检测到配置不完整，将进入配置向导。")
+        return run_config_wizard()
     print("未找到 config/config.json，将进入首次配置向导。")
     return run_config_wizard()
 
@@ -66,13 +72,74 @@ def ask(prompt: str, default: str = "") -> str:
     return raw or default
 
 
-def ask_int(prompt: str, default: int) -> int:
+def ask_required(prompt: str, default: str = "") -> str:
     while True:
-        raw = ask(prompt, str(default))
+        value = ask(prompt, default)
+        if value and not is_placeholder(value):
+            return value
+        print("此项必填，请输入有效内容。")
+
+
+def ask_int(prompt: str, default: int | None = None) -> int:
+    while True:
+        raw = ask(prompt, "" if default is None else str(default))
         try:
-            return int(raw)
+            value = int(raw)
+            if 1 <= value <= 12:
+                return value
+            print("月份必须在 1-12 之间。")
         except ValueError:
             print("请输入数字，例如 8。")
+
+
+def is_placeholder(value: Any) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, str):
+        return False
+    text = value.strip()
+    if not text:
+        return True
+    return any(marker in text for marker in PLACEHOLDER_MARKERS)
+
+
+def is_month(value: Any) -> bool:
+    return isinstance(value, int) and 1 <= value <= 12
+
+
+def validate_config(config: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    policy = config.get("policy_revision")
+    if not isinstance(policy, dict):
+        return ["缺少 policy_revision 配置段。"]
+
+    if is_placeholder(config.get("feishu_domain")):
+        errors.append("缺少 feishu_domain。")
+    if is_placeholder(policy.get("folder_token")):
+        errors.append("缺少方针修正文件夹 token。")
+    if is_placeholder(policy.get("source_token")):
+        errors.append("缺少源表 token。")
+    if not is_month(policy.get("source_month")):
+        errors.append("source_month 必须是 1-12 的数字。")
+    if not is_month(policy.get("target_month")):
+        errors.append("target_month 必须是 1-12 的数字。")
+    return errors
+
+
+def is_config_valid(config: dict[str, Any]) -> bool:
+    return not validate_config(config)
+
+
+def print_config_summary(config: dict[str, Any]) -> None:
+    policy = config.get("policy_revision", {})
+    print("")
+    print("当前配置摘要：")
+    print(f"- 飞书域名：{config.get('feishu_domain') or '(未配置)'}")
+    print(f"- 目标文件夹 token：{policy.get('folder_token') or '(未配置)'}")
+    print(f"- 源月份：{policy.get('source_month') or '(未配置)'}")
+    print(f"- 源表名称：{policy.get('source_name') or '(未配置)'}")
+    print(f"- 源表 token：{policy.get('source_token') or '(未配置)'}")
+    print(f"- 默认目标月份：{policy.get('target_month') or '(未配置)'}")
 
 
 def run_config_wizard() -> dict[str, Any]:
@@ -89,17 +156,20 @@ def run_config_wizard() -> dict[str, Any]:
     print("=== 业绩表格生成工具配置向导 ===")
     print("可以粘贴完整飞书链接，也可以只粘贴 token。")
     print("")
+    print_config_summary(current)
 
-    sample_domain = current.get("feishu_domain", "https://gw8xslpm5z.feishu.cn")
-    domain_input = ask("请输入飞书域名，或任意飞书表格/文件夹链接", sample_domain)
+    sample_domain = current.get("feishu_domain") or "https://gw8xslpm5z.feishu.cn"
+    domain_input = ask_required("请输入飞书域名，或任意飞书表格/文件夹链接", sample_domain)
     current["feishu_domain"] = extract_domain(domain_input, sample_domain)
 
     folder_default = policy.get("folder_token", "")
-    folder_input = ask("请粘贴“方针修正”所在文件夹链接或 folder_token", folder_default)
+    folder_input = ask_required("请粘贴“方针修正”所在文件夹链接或 folder_token", folder_default)
     policy["folder_token"] = extract_token(folder_input, "folder")
 
-    source_month = ask_int("请输入源月份，例如 7", int(policy.get("source_month", 7)))
-    target_month = ask_int("请输入默认目标月份，例如 8", int(policy.get("target_month", source_month + 1)))
+    existing_source_month = policy.get("source_month") if is_month(policy.get("source_month")) else None
+    source_month = ask_int("请输入源月份，例如 7", existing_source_month)
+    existing_target_month = policy.get("target_month") if is_month(policy.get("target_month")) else source_month + 1
+    target_month = ask_int("请输入默认目标月份，例如 8", existing_target_month)
     policy["source_month"] = source_month
     policy["target_month"] = target_month
 
@@ -107,10 +177,18 @@ def run_config_wizard() -> dict[str, Any]:
     policy["source_name"] = ask("请输入源表名称", source_name_default)
 
     source_token_default = policy.get("source_token", "")
-    source_input = ask("请粘贴源表链接或 spreadsheet_token", source_token_default)
+    source_input = ask_required("请粘贴源表链接或 spreadsheet_token", source_token_default)
     policy["source_token"] = extract_token(source_input, "sheet")
 
     current.setdefault("lark_cli_path", "")
+    errors = validate_config(current)
+    if errors:
+        print("")
+        print("配置仍不完整：")
+        for error in errors:
+            print(f"- {error}")
+        raise RuntimeError("配置未保存，请重新运行配置向导。")
+
     save_config(current)
     print("")
     print(f"配置已保存：{DEFAULT_CONFIG_PATH}")

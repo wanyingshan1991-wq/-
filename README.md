@@ -1,64 +1,64 @@
 # 业绩表格生成工具
 
-这是一个给团队内部使用的飞书业绩表格自动生成项目。第一阶段目标是让使用者可以自己完成配置，并跑通第一版功能：
+这是一个给团队内部使用的飞书业绩表格自动生成项目。当前阶段目标是让使用者可以自己完成配置，并跑通第一版功能：
 
 - 生成 `经营方针修正-X月`
 - 从源月份表格复制新表
 - 设置当月“经营方针调整”区域为白色背景
 - 回读校验目标表格和工作表结构
 
-## 适合谁使用
+## 推荐使用方式
 
-会用电脑的人：按下面步骤配置后，双击 `run.bat`，按菜单操作。
+### 会用电脑的人
 
-不会命令行的人：把这个项目交给 WorkBuddy/Codex，并让它按本 README 帮你安装、授权、配置和运行。
+1. 打开 GitHub 仓库。
+2. 点击 `Code`。
+3. 选择 `Download ZIP`。
+4. 解压到桌面或常用文件夹。
+5. 打开解压后的项目文件夹。
+6. 双击 `first_time_setup.bat`。
+7. 按提示完成配置。
+8. 桌面会出现 `业绩表格生成工具` 快捷方式。
+9. 之后直接双击桌面快捷方式运行。
 
-## 第一次使用
+### 使用 WorkBuddy/Codex 的人
 
-1. 安装 Python 3.10 或更新版本。
-2. 安装飞书 CLI：`lark-cli`。
-3. 登录并授权飞书 CLI：
-
-```bash
-lark-cli auth login --domain docs --domain drive
-```
-
-4. 双击 `run.bat`。
-5. 如果没有 `config/config.json`，工具会自动进入配置向导。
-6. 按提示粘贴飞书文件夹链接、源表链接或 token。
-7. 回到主菜单，选择 `1. 生成经营方针修正-X月`。
-
-## 主菜单
-
-双击 `run.bat` 后会出现：
+把 GitHub 链接发给 WorkBuddy/Codex，然后说：
 
 ```text
-1. 生成经营方针修正-X月
-2. 配置/更新飞书 token
-3. 检查环境和飞书授权
-0. 退出
+请打开这个 GitHub 项目，下载或 clone 到本地，按 README 检查 Python 和 lark-cli，完成飞书授权，然后运行 first_time_setup.bat。配置时请让我粘贴自己的飞书文件夹链接、源表链接，并输入源月份和目标月份。完成后请确认桌面是否出现“业绩表格生成工具”快捷方式。
 ```
 
-## 配置向导
-
-可以运行：
-
-```bash
-python scripts/main.py configure
-```
-
-也可以在主菜单选择：
+以后只需要说：
 
 ```text
-2. 配置/更新飞书 token
+请运行桌面的“业绩表格生成工具”，帮我生成经营方针修正-X月。
 ```
 
-配置向导支持两种输入方式：
+## 第一次配置需要准备什么
 
-- 粘贴完整飞书链接
-- 只粘贴 token
+配置向导会要求你提供：
 
-例如表格链接：
+- 飞书域名，或任意飞书表格/文件夹链接
+- “方针修正”所在文件夹链接或 `folder_token`
+- 源月份，例如 `8`
+- 默认目标月份，例如 `9`
+- 源表名称，例如 `经营方针修正-8月`
+- 源表链接或 `spreadsheet_token`
+
+配置会保存到本地：
+
+```text
+config/config.json
+```
+
+这个文件只属于使用者自己，不要发给别人，也不要上传 GitHub。
+
+## 链接和 token 怎么填
+
+可以粘贴完整飞书链接，也可以只粘贴 token。
+
+表格链接示例：
 
 ```text
 https://gw8xslpm5z.feishu.cn/sheets/AVZss1qKOhoUb4tMCuFcMeltnjf
@@ -70,7 +70,7 @@ https://gw8xslpm5z.feishu.cn/sheets/AVZss1qKOhoUb4tMCuFcMeltnjf
 AVZss1qKOhoUb4tMCuFcMeltnjf
 ```
 
-例如文件夹链接：
+文件夹链接示例：
 
 ```text
 https://gw8xslpm5z.feishu.cn/drive/folder/GXa5fxrfPlL8dDdt0sXct4eJnDc
@@ -82,45 +82,42 @@ https://gw8xslpm5z.feishu.cn/drive/folder/GXa5fxrfPlL8dDdt0sXct4eJnDc
 GXa5fxrfPlL8dDdt0sXct4eJnDc
 ```
 
-## 配置文件
+## 日常运行
 
-真实配置文件是：
-
-```text
-config/config.json
-```
-
-示例配置文件是：
+双击桌面快捷方式：
 
 ```text
-config/config.example.json
+业绩表格生成工具
 ```
 
-示例配置：
+或在项目文件夹里双击：
 
-```json
-{
-  "feishu_domain": "https://gw8xslpm5z.feishu.cn",
-  "lark_cli_path": "",
-  "policy_revision": {
-    "folder_token": "GXa5fxrfPlL8dDdt0sXct4eJnDc",
-    "source_month": 7,
-    "source_name": "经营方针修正-7月",
-    "source_token": "AVZss1qKOhoUb4tMCuFcMeltnjf",
-    "target_month": 8
-  }
-}
+```text
+run.bat
 ```
 
-字段说明：
+主菜单：
 
-- `feishu_domain`：飞书文档域名。
-- `lark_cli_path`：一般留空。只有系统找不到 `lark-cli` 时才填写完整路径。
-- `folder_token`：方针修正文件所在文件夹 token。
-- `source_month`：源月份，通常是目标月份减 1。
-- `source_name`：源表名称。
-- `source_token`：源表 token。脚本会优先按 `source_name` 在文件夹里查找，找不到时使用这个 token。
-- `target_month`：默认生成月份。运行时也可以重新输入。
+```text
+1. 生成经营方针修正-X月
+2. 配置/更新飞书 token
+3. 检查环境和飞书授权
+0. 退出
+```
+
+生成前工具会显示执行摘要：
+
+```text
+即将执行：
+- 生成表格：经营方针修正-9月
+- 源表名称：经营方针修正-8月
+- 源表 token：...
+- 目标文件夹 token：...
+
+是否继续？输入 Y 继续，其他任意键取消
+```
+
+只有确认后才会执行。
 
 ## 常用命令
 
@@ -148,21 +145,32 @@ python scripts/main.py check
 python scripts/main.py generate-policy --month 8
 ```
 
-兼容旧入口：
-
-```bash
-python scripts/generate_policy_revision.py --month 8
-```
-
-## 让 Agent 帮你执行
-
-可以直接对 WorkBuddy/Codex 说：
+创建桌面快捷方式：
 
 ```text
-请根据 README 帮我检查 Python、安装或检查 lark-cli、完成飞书授权，然后运行 python scripts/main.py configure 配置 token，最后生成经营方针修正-8月。
+create_desktop_shortcut.bat
 ```
 
-如果授权失败，让 Agent 读取：
+首次设置：
+
+```text
+first_time_setup.bat
+```
+
+## 安装和授权
+
+需要本机安装：
+
+- Python 3.10 或更新版本
+- 飞书 CLI：`lark-cli`
+
+飞书 CLI 授权命令：
+
+```bash
+lark-cli auth login --domain docs --domain drive
+```
+
+如果授权失败，让 WorkBuddy/Codex 读取：
 
 ```bash
 lark-cli auth status --json --verify
@@ -174,10 +182,11 @@ lark-cli auth status --json --verify
 
 - 不要提交 `config/config.json`。
 - 不要把 access token、refresh token、app secret 放进 GitHub。
-- `config.example.json` 只放示例 token，团队外公开前请确认这些示例 token 是否允许暴露。
+- `config/config.example.json` 是空模板，不能直接运行。
+- 每个使用者都应该配置自己的飞书文件夹和源表链接。
 
 ## 当前限制
 
-- 第一阶段只支持 `经营方针修正-X月`。
+- 当前只支持 `经营方针修正-X月`。
 - 目前通过 `lark-cli` 操作飞书，不是纯 OpenAPI 独立程序。
 - 新电脑需要先安装并授权 `lark-cli`。
