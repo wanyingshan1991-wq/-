@@ -72,6 +72,29 @@ def set_adjustment_area_white(client: LarkClient, spreadsheet_token: str, month:
         )
 
 
+def resolve_source_file(
+    client: LarkClient,
+    folder_token: str,
+    target_month: int,
+    configured_source_name: str,
+    configured_source_token: str,
+) -> tuple[str, str]:
+    previous_month = target_month - 1
+    previous_name = f"经营方针修正-{previous_month}月"
+    previous_source = client.find_sheet_file(folder_token, previous_name)
+    if previous_source:
+        return previous_source["token"], f"上一月表：{previous_name}"
+
+    configured_source = client.find_sheet_file(folder_token, configured_source_name) if configured_source_name else None
+    if configured_source:
+        return configured_source["token"], f"配置源表：{configured_source_name}"
+
+    if configured_source_token:
+        return configured_source_token, "配置源表 token"
+
+    raise RuntimeError(f"找不到上一月表 {previous_name}，且没有可用的配置源表。")
+
+
 def generate(config: dict[str, Any], month: int | None = None, force_copy: bool = False) -> dict[str, Any]:
     section = config.get("policy_revision")
     if not isinstance(section, dict):
@@ -99,9 +122,15 @@ def generate(config: dict[str, Any], month: int | None = None, force_copy: bool 
     if existing and not force_copy:
         target = existing
         token = target["token"]
+        source_used = "未复制：目标表已存在"
     else:
-        source = client.find_sheet_file(folder_token, source_name) if source_name else None
-        resolved_source_token = source["token"] if source else source_token
+        resolved_source_token, source_used = resolve_source_file(
+            client,
+            folder_token,
+            target_month,
+            source_name,
+            source_token,
+        )
         client.copy_sheet_file(resolved_source_token, folder_token, target_name)
         target = client.find_sheet_file(folder_token, target_name)
         if not target:
@@ -117,6 +146,7 @@ def generate(config: dict[str, Any], month: int | None = None, force_copy: bool 
         "created": created,
         "target": target,
         "workbook_sheets": sheet_titles,
+        "source_used": source_used,
         "styled": True,
         "spreadsheet_token": token,
         "url": f"{feishu_domain}/sheets/{token}",

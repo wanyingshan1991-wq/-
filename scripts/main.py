@@ -30,6 +30,7 @@ def print_result(result: dict) -> None:
     print(f"是否新建：{'是' if result['created'] else '否，目标表已存在'}")
     print(f"表格名称：{result['target'].get('name')}")
     print(f"表格链接：{result['url']}")
+    print(f"源表选择：{result.get('source_used', '未记录')}")
     print("工作表：")
     for title in result["workbook_sheets"]:
         print(f"- {title}")
