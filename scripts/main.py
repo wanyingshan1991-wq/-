@@ -48,7 +48,7 @@ def confirm_policy_generation(config: dict, month: int) -> bool:
     errors = validate_config(config)
     if errors:
         print("")
-        print("配置不完整，请先选择 2. 配置/更新飞书 token。")
+        print("配置不完整，请先选择 2. 重新配置文件夹/源表。")
         for error in errors:
             print(f"- {error}")
         return False
@@ -76,7 +76,7 @@ def menu() -> int:
         print("")
         print("=== 业绩表格生成工具 ===")
         print("1. 生成经营方针修正-X月")
-        print("2. 配置/更新飞书 token")
+        print("2. 重新配置文件夹/源表")
         print("3. 检查环境和飞书授权")
         print("0. 退出")
         choice = input("请输入选项: ").strip()

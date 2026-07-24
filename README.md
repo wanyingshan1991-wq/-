@@ -118,7 +118,7 @@ run.bat
 
 ```text
 1. 生成经营方针修正-X月
-2. 配置/更新飞书 token
+2. 重新配置文件夹/源表
 3. 检查环境和飞书授权
 0. 退出
 ```
@@ -145,7 +145,7 @@ run.bat
 python scripts/main.py
 ```
 
-配置/更新 token：
+重新配置文件夹/源表：
 
 ```bash
 python scripts/main.py configure
