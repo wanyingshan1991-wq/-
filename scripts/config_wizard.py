@@ -256,6 +256,53 @@ def ensure_resource_plan_config(config: dict[str, Any], plan_key: str) -> dict[s
     return config
 
 
+def ask_person_name(config: dict[str, Any]) -> str:
+    people = config.setdefault("people", {})
+    default = config.get("last_person", "")
+    if not default and people:
+        default = next(iter(people))
+    name = ask_required("请输入人员姓名", default)
+    config["last_person"] = name
+    people.setdefault(name, {})
+    save_config(config)
+    return name
+
+
+def ensure_personal_month_plan_config(config: dict[str, Any], person_name: str) -> dict[str, Any]:
+    config = ensure_resource_plan_config(config, "marketing_resource_plan")
+    config = ensure_resource_plan_config(config, "rd_resource_plan")
+    person = config.setdefault("people", {}).setdefault(person_name, {})
+    if not is_placeholder(person.get("personal_month_plan_token")):
+        return config
+
+    print("")
+    print(f"首次生成 {person_name} 的个人月周计划，需要提供这张表的飞书链接。")
+    sheet_input = ask_required(
+        f"请粘贴“个人月周推移计划-{person_name}”表格链接或 spreadsheet_token",
+        person.get("personal_month_plan_token", ""),
+    )
+    person["personal_month_plan_token"] = extract_token(sheet_input, "sheet")
+    save_config(config)
+    return config
+
+
+def ensure_personal_week_day_plan_config(config: dict[str, Any], person_name: str) -> dict[str, Any]:
+    config = ensure_personal_month_plan_config(config, person_name)
+    person = config.setdefault("people", {}).setdefault(person_name, {})
+    if not is_placeholder(person.get("personal_week_day_plan_token")):
+        return config
+
+    print("")
+    print(f"首次生成 {person_name} 的个人周日计划，需要提供这张表的飞书链接。")
+    sheet_input = ask_required(
+        f"请粘贴“个人周日推移计划-{person_name}”表格链接或 spreadsheet_token",
+        person.get("personal_week_day_plan_token", ""),
+    )
+    person["personal_week_day_plan_token"] = extract_token(sheet_input, "sheet")
+    save_config(config)
+    return config
+
+
 def ensure_policy_revision_config(config: dict[str, Any]) -> dict[str, Any]:
     errors = validate_config(config)
     if not errors:

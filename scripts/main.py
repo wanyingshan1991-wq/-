@@ -1,16 +1,21 @@
 import argparse
 import json
 import sys
+from datetime import date
 
 from config_wizard import (
+    ask_person_name,
     ensure_business_month_plan_config,
     ensure_config_exists,
+    ensure_personal_month_plan_config,
+    ensure_personal_week_day_plan_config,
     ensure_policy_revision_config,
     ensure_resource_plan_config,
     run_config_wizard,
     save_config,
 )
 from generators.business_month_plan import generate as generate_business_month_plan
+from generators.personal_plans import generate_personal_month_plan, generate_personal_week_day_plan
 from generators.policy_revision import generate as generate_policy_revision
 from generators.resource_plans import SPECS as RESOURCE_PLAN_SPECS
 from generators.resource_plans import generate as generate_resource_plan
@@ -32,6 +37,21 @@ def ask_month(default: int | None = None) -> int:
             return int(raw)
         except ValueError:
             print("请输入数字，例如 8。")
+
+
+def ask_year(default: int | None = None) -> int:
+    default = default or date.today().year
+    while True:
+        raw = input(f"请输入年份，例如 {default} [{default}]: ").strip()
+        if not raw:
+            return default
+        try:
+            value = int(raw)
+            if 2000 <= value <= 2100:
+                return value
+            print("年份必须在 2000-2100 之间。")
+        except ValueError:
+            print("请输入数字年份，例如 2026。")
 
 
 def print_result(result: dict) -> None:
@@ -101,6 +121,30 @@ def confirm_resource_plan_generation(config: dict, plan: str, month: int) -> boo
     return answer == "y"
 
 
+def confirm_personal_month_generation(person_name: str, month: int, year: int) -> bool:
+    print("")
+    print("即将执行：")
+    print(f"- 生成人员：{person_name}")
+    print(f"- 生成工作表：个人月周推移计划-{month}月")
+    print(f"- 日期范围：{year}年{month}月1日所在周的周一开始，连续 35 天")
+    print("- 将写入 C3/C4 上游公式、日期行、星期行和周标签")
+    print("- 将清空 C7:AK7 与 C9:AK30 人工填写区")
+    answer = input("是否继续？输入 Y 继续，其他任意键取消: ").strip().lower()
+    return answer == "y"
+
+
+def confirm_personal_week_day_generation(person_name: str, month: int, year: int) -> bool:
+    print("")
+    print("即将执行：")
+    print(f"- 生成人员：{person_name}")
+    print(f"- 生成内容：个人周日推移计划-{month}月对应 5 个周 sheet")
+    print(f"- 周范围：{year}年{month}月1日所在周起连续 5 周")
+    print("- 将写入 C3 周计划公式、C6:I6 日期、C7:I7 星期")
+    print("- 将清空 C4:C5、C8:I8、C9:I12 人工填写区")
+    answer = input("是否继续？输入 Y 继续，其他任意键取消: ").strip().lower()
+    return answer == "y"
+
+
 def run_resource_plan_flow(config: dict, plan: str, default_month: int | None) -> None:
     spec = RESOURCE_PLAN_SPECS[plan]
     config = ensure_policy_revision_config(config)
@@ -113,6 +157,38 @@ def run_resource_plan_flow(config: dict, plan: str, default_month: int | None) -
         print("已取消。")
         return
     result = generate_resource_plan(config, plan=plan, month=month)
+    print_result(result)
+
+
+def run_personal_month_flow(config: dict, default_month: int | None) -> None:
+    person_name = ask_person_name(config)
+    config = ensure_personal_month_plan_config(config, person_name)
+    person = config.setdefault("people", {}).setdefault(person_name, {})
+    month = ask_month(person.get("target_month") or default_month)
+    year = ask_year(person.get("target_year"))
+    person["target_month"] = month
+    person["target_year"] = year
+    save_config(config)
+    if not confirm_personal_month_generation(person_name, month, year):
+        print("已取消。")
+        return
+    result = generate_personal_month_plan(config, person_name, month, year)
+    print_result(result)
+
+
+def run_personal_week_day_flow(config: dict, default_month: int | None) -> None:
+    person_name = ask_person_name(config)
+    config = ensure_personal_week_day_plan_config(config, person_name)
+    person = config.setdefault("people", {}).setdefault(person_name, {})
+    month = ask_month(person.get("target_month") or default_month)
+    year = ask_year(person.get("target_year"))
+    person["target_month"] = month
+    person["target_year"] = year
+    save_config(config)
+    if not confirm_personal_week_day_generation(person_name, month, year):
+        print("已取消。")
+        return
+    result = generate_personal_week_day_plan(config, person_name, month, year)
     print_result(result)
 
 
@@ -129,6 +205,8 @@ def menu() -> int:
         print("3. 生成事业资源分配计划-X月")
         print("4. 生成营销资源分配计划-X月")
         print("5. 生成研发资源分配计划-X月")
+        print("6. 生成个人月周推移计划-姓名-X月")
+        print("7. 生成个人周日推移计划-姓名-X月")
         print("8. 按需重新配置链接")
         print("9. 检查环境和飞书授权")
         print("0. 退出")
@@ -159,6 +237,10 @@ def menu() -> int:
             run_resource_plan_flow(config, "marketing", default_month)
         elif choice == "5":
             run_resource_plan_flow(config, "rd", default_month)
+        elif choice == "6":
+            run_personal_month_flow(config, default_month)
+        elif choice == "7":
+            run_personal_week_day_flow(config, default_month)
         elif choice == "8":
             config = run_config_wizard()
             print("配置完成。")
@@ -186,6 +268,16 @@ def main() -> int:
     resource_parser.add_argument("plan", choices=sorted(RESOURCE_PLAN_SPECS))
     resource_parser.add_argument("--month", type=int)
     resource_parser.add_argument("--force-copy", action="store_true")
+    personal_month_parser = subparsers.add_parser("generate-personal-month")
+    personal_month_parser.add_argument("person_name")
+    personal_month_parser.add_argument("--month", type=int)
+    personal_month_parser.add_argument("--year", type=int)
+    personal_month_parser.add_argument("--force-copy", action="store_true")
+    personal_week_parser = subparsers.add_parser("generate-personal-week")
+    personal_week_parser.add_argument("person_name")
+    personal_week_parser.add_argument("--month", type=int)
+    personal_week_parser.add_argument("--year", type=int)
+    personal_week_parser.add_argument("--force-copy", action="store_true")
 
     args = parser.parse_args()
 
@@ -235,6 +327,40 @@ def main() -> int:
             print("已取消。")
             return 1
         result = generate_resource_plan(config, plan=args.plan, month=month, force_copy=args.force_copy)
+        print_result(result)
+        return 0
+    if args.command == "generate-personal-month":
+        config = ensure_config_exists()
+        config = ensure_personal_month_plan_config(config, args.person_name)
+        person = config.setdefault("people", {}).setdefault(args.person_name, {})
+        month = args.month or person.get("target_month")
+        if not month:
+            month = ask_month()
+        year = args.year or person.get("target_year") or ask_year()
+        person["target_month"] = month
+        person["target_year"] = year
+        save_config(config)
+        if not confirm_personal_month_generation(args.person_name, month, year):
+            print("已取消。")
+            return 1
+        result = generate_personal_month_plan(config, args.person_name, month, year, force_copy=args.force_copy)
+        print_result(result)
+        return 0
+    if args.command == "generate-personal-week":
+        config = ensure_config_exists()
+        config = ensure_personal_week_day_plan_config(config, args.person_name)
+        person = config.setdefault("people", {}).setdefault(args.person_name, {})
+        month = args.month or person.get("target_month")
+        if not month:
+            month = ask_month()
+        year = args.year or person.get("target_year") or ask_year()
+        person["target_month"] = month
+        person["target_year"] = year
+        save_config(config)
+        if not confirm_personal_week_day_generation(args.person_name, month, year):
+            print("已取消。")
+            return 1
+        result = generate_personal_week_day_plan(config, args.person_name, month, year, force_copy=args.force_copy)
         print_result(result)
         return 0
     return menu()

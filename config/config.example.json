@@ -27,5 +27,7 @@
     "spreadsheet_token": "",
     "source_month": null,
     "target_month": null
-  }
+  },
+  "last_person": "",
+  "people": {}
 }
