@@ -145,6 +145,24 @@ def confirm_personal_week_day_generation(person_name: str, month: int, year: int
     return answer == "y"
 
 
+def confirm_all_core_generation(month: int, include_person: bool, person_name: str | None, year: int | None) -> bool:
+    print("")
+    print("即将统一生成：")
+    print(f"- 目标月份：{month}月")
+    print(f"- 依赖：经营方针修正-{month - 1}月 已存在或可由配置定位")
+    print("- 1. 事业年月计划")
+    print("- 2. 事业资源分配计划")
+    print("- 3. 营销资源分配计划")
+    print("- 4. 研发资源分配计划")
+    if include_person and person_name and year:
+        print(f"- 5. {person_name} 的个人月周推移计划（{year}年{month}月）")
+        print(f"- 6. {person_name} 的个人周日推移计划（{year}年{month}月）")
+    else:
+        print("- 个人计划：本次跳过")
+    answer = input("是否继续？输入 Y 继续，其他任意键取消: ").strip().lower()
+    return answer == "y"
+
+
 def run_resource_plan_flow(config: dict, plan: str, default_month: int | None) -> None:
     spec = RESOURCE_PLAN_SPECS[plan]
     config = ensure_policy_revision_config(config)
@@ -192,6 +210,58 @@ def run_personal_week_day_flow(config: dict, default_month: int | None) -> None:
     print_result(result)
 
 
+def run_all_core_flow(config: dict, default_month: int | None) -> None:
+    month = ask_month(default_month)
+    include_person_answer = input("是否同时生成某个人的个人月周和周日计划？输入 Y 继续，其他任意键跳过: ").strip().lower()
+    include_person = include_person_answer == "y"
+    person_name = None
+    year = None
+
+    config = ensure_policy_revision_config(config)
+    config = ensure_business_month_plan_config(config)
+    for plan in ("business", "marketing", "rd"):
+        spec = RESOURCE_PLAN_SPECS[plan]
+        config = ensure_resource_plan_config(config, spec.config_key)
+        config.setdefault(spec.config_key, {})["target_month"] = month
+
+    config.setdefault("business_month_plan", {})["target_month"] = month
+
+    if include_person:
+        person_name = ask_person_name(config)
+        config = ensure_personal_week_day_plan_config(config, person_name)
+        person = config.setdefault("people", {}).setdefault(person_name, {})
+        year = ask_year(person.get("target_year"))
+        person["target_month"] = month
+        person["target_year"] = year
+
+    save_config(config)
+    if not confirm_all_core_generation(month, include_person, person_name, year):
+        print("已取消。")
+        return
+
+    steps = [
+        ("事业年月计划", lambda: generate_business_month_plan(config, month=month)),
+        ("事业资源分配计划", lambda: generate_resource_plan(config, plan="business", month=month)),
+        ("营销资源分配计划", lambda: generate_resource_plan(config, plan="marketing", month=month)),
+        ("研发资源分配计划", lambda: generate_resource_plan(config, plan="rd", month=month)),
+    ]
+    if include_person and person_name and year:
+        steps.extend(
+            [
+                ("个人月周推移计划", lambda: generate_personal_month_plan(config, person_name, month, year)),
+                ("个人周日推移计划", lambda: generate_personal_week_day_plan(config, person_name, month, year)),
+            ]
+        )
+
+    print("")
+    print("=== 开始统一生成 ===")
+    for label, action in steps:
+        print(f"正在生成：{label}...")
+        result = action()
+        print_result(result)
+    print("统一生成完成。")
+
+
 def menu() -> int:
     while True:
         config = ensure_config_exists()
@@ -207,7 +277,8 @@ def menu() -> int:
         print("5. 生成研发资源分配计划-X月")
         print("6. 生成个人月周推移计划-姓名-X月")
         print("7. 生成个人周日推移计划-姓名-X月")
-        print("8. 按需重新配置链接")
+        print("8. 统一生成X月核心表格")
+        print("88. 按需重新配置链接")
         print("9. 检查环境和飞书授权")
         print("0. 退出")
         choice = input("请输入选项: ").strip()
@@ -242,6 +313,8 @@ def menu() -> int:
         elif choice == "7":
             run_personal_week_day_flow(config, default_month)
         elif choice == "8":
+            run_all_core_flow(config, default_month)
+        elif choice == "88":
             config = run_config_wizard()
             print("配置完成。")
         elif choice == "9":
@@ -278,6 +351,10 @@ def main() -> int:
     personal_week_parser.add_argument("--month", type=int)
     personal_week_parser.add_argument("--year", type=int)
     personal_week_parser.add_argument("--force-copy", action="store_true")
+    all_parser = subparsers.add_parser("generate-all-core")
+    all_parser.add_argument("--month", type=int)
+    all_parser.add_argument("--year", type=int)
+    all_parser.add_argument("--person-name")
 
     args = parser.parse_args()
 
@@ -362,6 +439,42 @@ def main() -> int:
             return 1
         result = generate_personal_week_day_plan(config, args.person_name, month, year, force_copy=args.force_copy)
         print_result(result)
+        return 0
+    if args.command == "generate-all-core":
+        config = ensure_config_exists()
+        month = args.month or config.get("policy_revision", {}).get("target_month")
+        if not month:
+            month = ask_month()
+        include_person = bool(args.person_name)
+        person_name = args.person_name
+        year = args.year
+        config = ensure_policy_revision_config(config)
+        config = ensure_business_month_plan_config(config)
+        for plan in ("business", "marketing", "rd"):
+            spec = RESOURCE_PLAN_SPECS[plan]
+            config = ensure_resource_plan_config(config, spec.config_key)
+            config.setdefault(spec.config_key, {})["target_month"] = month
+        config.setdefault("business_month_plan", {})["target_month"] = month
+        if include_person and person_name:
+            config = ensure_personal_week_day_plan_config(config, person_name)
+            person = config.setdefault("people", {}).setdefault(person_name, {})
+            year = year or person.get("target_year") or ask_year()
+            person["target_month"] = month
+            person["target_year"] = year
+        save_config(config)
+        if not confirm_all_core_generation(month, include_person, person_name, year):
+            print("已取消。")
+            return 1
+        for _, action in [
+            ("事业年月计划", lambda: generate_business_month_plan(config, month=month)),
+            ("事业资源分配计划", lambda: generate_resource_plan(config, plan="business", month=month)),
+            ("营销资源分配计划", lambda: generate_resource_plan(config, plan="marketing", month=month)),
+            ("研发资源分配计划", lambda: generate_resource_plan(config, plan="rd", month=month)),
+        ]:
+            print_result(action())
+        if include_person and person_name and year:
+            print_result(generate_personal_month_plan(config, person_name, month, year))
+            print_result(generate_personal_week_day_plan(config, person_name, month, year))
         return 0
     return menu()
 
