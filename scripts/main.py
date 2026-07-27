@@ -15,7 +15,9 @@ from config_wizard import (
     save_config,
 )
 from generators.business_month_plan import generate as generate_business_month_plan
+from generators.business_month_plan import get_sheet_id, month_sheet_name
 from generators.personal_plans import generate_personal_month_plan, generate_personal_week_day_plan
+from generators.personal_plans import week_blocks
 from generators.policy_revision import generate as generate_policy_revision
 from generators.resource_plans import SPECS as RESOURCE_PLAN_SPECS
 from generators.resource_plans import generate as generate_resource_plan
@@ -72,6 +74,159 @@ def check_environment() -> None:
     client = LarkClient(config)
     status = client.auth_status()
     print(json.dumps(status, ensure_ascii=False, indent=2))
+
+
+def has_sheet(client: LarkClient, spreadsheet_token: str | None, sheet_name: str) -> bool:
+    if not spreadsheet_token:
+        return False
+    return bool(get_sheet_id(client, spreadsheet_token, sheet_name))
+
+
+def check_policy_dependency(client: LarkClient, config: dict, month: int, errors: list[str]) -> None:
+    policy = config.get("policy_revision", {})
+    folder_token = policy.get("folder_token")
+    expected_name = f"经营方针修正-{month - 1}月"
+    if not folder_token:
+        errors.append("未配置方针修正文件夹链接，无法检查上一月方针修正表。")
+        return
+    if not client.find_sheet_file(folder_token, expected_name):
+        errors.append(f"未找到 {expected_name}。请先生成或确认上一月方针修正表。")
+
+
+def check_month_source_sheet(
+    client: LarkClient,
+    spreadsheet_token: str | None,
+    display_name: str,
+    month: int,
+    errors: list[str],
+    configured_source_month: int | None = None,
+) -> None:
+    if not spreadsheet_token:
+        errors.append(f"未配置 {display_name} 表格链接。")
+        return
+    source_month = configured_source_month or month - 1
+    if month <= 1 and not configured_source_month:
+        errors.append(f"{display_name} 生成 1月 时无法自动推断上一月，请先配置源月份。")
+        return
+    source_sheet = month_sheet_name(source_month)
+    if not has_sheet(client, spreadsheet_token, source_sheet):
+        errors.append(f"{display_name} 中未找到源 sheet：{source_sheet}。")
+
+
+def check_required_sheet(
+    client: LarkClient,
+    spreadsheet_token: str | None,
+    display_name: str,
+    sheet_name: str,
+    errors: list[str],
+) -> None:
+    if not spreadsheet_token:
+        errors.append(f"未配置 {display_name} 表格链接。")
+        return
+    if not has_sheet(client, spreadsheet_token, sheet_name):
+        errors.append(f"{display_name} 中未找到上游 sheet：{sheet_name}。")
+
+
+def print_dependency_errors(errors: list[str]) -> bool:
+    if not errors:
+        return False
+    unique_errors = list(dict.fromkeys(errors))
+    print("")
+    print("暂不能执行，因为缺少以下前置条件：")
+    for error in unique_errors:
+        print(f"- {error}")
+    print("")
+    print("请先补齐上述内容后，再重新选择生成。")
+    return True
+
+
+def dependency_errors_for_business_month(config: dict, month: int) -> list[str]:
+    client = LarkClient(config)
+    section = config.get("business_month_plan", {})
+    errors: list[str] = []
+    check_month_source_sheet(client, section.get("spreadsheet_token"), "事业年月计划", month, errors, section.get("source_month"))
+    return errors
+
+
+def dependency_errors_for_resource(config: dict, plan: str, month: int, generated_in_flow: set[str] | None = None) -> list[str]:
+    generated_in_flow = generated_in_flow or set()
+    client = LarkClient(config)
+    spec = RESOURCE_PLAN_SPECS[plan]
+    section = config.get(spec.config_key, {})
+    errors: list[str] = []
+    check_month_source_sheet(client, section.get("spreadsheet_token"), spec.display_name, month, errors, section.get("source_month"))
+    check_policy_dependency(client, config, month, errors)
+
+    if plan == "business" and "business_month" not in generated_in_flow:
+        check_required_sheet(
+            client,
+            config.get("business_month_plan", {}).get("spreadsheet_token"),
+            "事业年月计划",
+            month_sheet_name(month),
+            errors,
+        )
+    if plan in {"marketing", "rd"} and "business_resource" not in generated_in_flow:
+        check_required_sheet(
+            client,
+            config.get("business_resource_plan", {}).get("spreadsheet_token"),
+            "事业资源分配计划",
+            month_sheet_name(month),
+            errors,
+        )
+    return errors
+
+
+def dependency_errors_for_personal_month(config: dict, person_name: str, month: int, generated_in_flow: set[str] | None = None) -> list[str]:
+    generated_in_flow = generated_in_flow or set()
+    client = LarkClient(config)
+    person = config.get("people", {}).get(person_name, {})
+    errors: list[str] = []
+    check_month_source_sheet(
+        client,
+        person.get("personal_month_plan_token"),
+        f"{person_name} 的个人月周推移计划",
+        month,
+        errors,
+    )
+    if "rd_resource" not in generated_in_flow:
+        check_required_sheet(client, config.get("rd_resource_plan", {}).get("spreadsheet_token"), "研发资源分配计划", month_sheet_name(month), errors)
+    if "marketing_resource" not in generated_in_flow:
+        check_required_sheet(client, config.get("marketing_resource_plan", {}).get("spreadsheet_token"), "营销资源分配计划", month_sheet_name(month), errors)
+    return errors
+
+
+def dependency_errors_for_personal_week(config: dict, person_name: str, month: int, year: int, generated_in_flow: set[str] | None = None) -> list[str]:
+    generated_in_flow = generated_in_flow or set()
+    client = LarkClient(config)
+    person = config.get("people", {}).get(person_name, {})
+    errors: list[str] = []
+    week_token = person.get("personal_week_day_plan_token")
+    if not week_token:
+        errors.append(f"未配置 {person_name} 的个人周日推移计划表格链接。")
+    elif not client.workbook_info(week_token)["data"].get("sheets"):
+        errors.append(f"{person_name} 的个人周日推移计划中没有可复制的模板 sheet。")
+    if "personal_month" not in generated_in_flow:
+        check_required_sheet(
+            client,
+            person.get("personal_month_plan_token"),
+            f"{person_name} 的个人月周推移计划",
+            month_sheet_name(month),
+            errors,
+        )
+    return errors
+
+
+def dependency_errors_for_all_core(config: dict, month: int, include_person: bool, person_name: str | None, year: int | None) -> list[str]:
+    errors: list[str] = []
+    errors.extend(dependency_errors_for_business_month(config, month))
+    errors.extend(dependency_errors_for_resource(config, "business", month, {"business_month"}))
+    errors.extend(dependency_errors_for_resource(config, "marketing", month, {"business_resource"}))
+    errors.extend(dependency_errors_for_resource(config, "rd", month, {"business_resource"}))
+    if include_person and person_name and year:
+        generated = {"business_month", "business_resource", "marketing_resource", "rd_resource"}
+        errors.extend(dependency_errors_for_personal_month(config, person_name, month, generated))
+        errors.extend(dependency_errors_for_personal_week(config, person_name, month, year, generated | {"personal_month"}))
+    return errors
 
 
 def confirm_policy_generation(config: dict, month: int) -> bool:
@@ -171,6 +326,8 @@ def run_resource_plan_flow(config: dict, plan: str, default_month: int | None) -
     month = ask_month(section.get("target_month") or default_month)
     section["target_month"] = month
     save_config(config)
+    if print_dependency_errors(dependency_errors_for_resource(config, plan, month)):
+        return
     if not confirm_resource_plan_generation(config, plan, month):
         print("已取消。")
         return
@@ -187,6 +344,8 @@ def run_personal_month_flow(config: dict, default_month: int | None) -> None:
     person["target_month"] = month
     person["target_year"] = year
     save_config(config)
+    if print_dependency_errors(dependency_errors_for_personal_month(config, person_name, month)):
+        return
     if not confirm_personal_month_generation(person_name, month, year):
         print("已取消。")
         return
@@ -203,6 +362,8 @@ def run_personal_week_day_flow(config: dict, default_month: int | None) -> None:
     person["target_month"] = month
     person["target_year"] = year
     save_config(config)
+    if print_dependency_errors(dependency_errors_for_personal_week(config, person_name, month, year)):
+        return
     if not confirm_personal_week_day_generation(person_name, month, year):
         print("已取消。")
         return
@@ -235,6 +396,8 @@ def run_all_core_flow(config: dict, default_month: int | None) -> None:
         person["target_year"] = year
 
     save_config(config)
+    if print_dependency_errors(dependency_errors_for_all_core(config, month, include_person, person_name, year)):
+        return
     if not confirm_all_core_generation(month, include_person, person_name, year):
         print("已取消。")
         return
@@ -290,6 +453,8 @@ def run_single_table_menu(config: dict, default_month: int | None) -> None:
             month = ask_month(default_business_month)
             config.setdefault("business_month_plan", {})["target_month"] = month
             save_config(config)
+            if print_dependency_errors(dependency_errors_for_business_month(config, month)):
+                continue
             if not confirm_business_month_plan_generation(config, month):
                 print("已取消。")
                 continue
@@ -396,6 +561,8 @@ def main() -> int:
             month = ask_month()
         config.setdefault("business_month_plan", {})["target_month"] = month
         save_config(config)
+        if print_dependency_errors(dependency_errors_for_business_month(config, month)):
+            return 1
         if not confirm_business_month_plan_generation(config, month):
             print("已取消。")
             return 1
@@ -412,6 +579,8 @@ def main() -> int:
             month = ask_month()
         config.setdefault(spec.config_key, {})["target_month"] = month
         save_config(config)
+        if print_dependency_errors(dependency_errors_for_resource(config, args.plan, month)):
+            return 1
         if not confirm_resource_plan_generation(config, args.plan, month):
             print("已取消。")
             return 1
@@ -429,6 +598,8 @@ def main() -> int:
         person["target_month"] = month
         person["target_year"] = year
         save_config(config)
+        if print_dependency_errors(dependency_errors_for_personal_month(config, args.person_name, month)):
+            return 1
         if not confirm_personal_month_generation(args.person_name, month, year):
             print("已取消。")
             return 1
@@ -446,6 +617,8 @@ def main() -> int:
         person["target_month"] = month
         person["target_year"] = year
         save_config(config)
+        if print_dependency_errors(dependency_errors_for_personal_week(config, args.person_name, month, year)):
+            return 1
         if not confirm_personal_week_day_generation(args.person_name, month, year):
             print("已取消。")
             return 1
@@ -474,6 +647,8 @@ def main() -> int:
             person["target_month"] = month
             person["target_year"] = year
         save_config(config)
+        if print_dependency_errors(dependency_errors_for_all_core(config, month, include_person, person_name, year)):
+            return 1
         if not confirm_all_core_generation(month, include_person, person_name, year):
             print("已取消。")
             return 1
