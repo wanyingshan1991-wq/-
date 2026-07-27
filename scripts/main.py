@@ -6,12 +6,14 @@ from config_wizard import (
     ensure_business_month_plan_config,
     ensure_config_exists,
     ensure_policy_revision_config,
+    ensure_resource_plan_config,
     run_config_wizard,
     save_config,
-    validate_config,
 )
 from generators.business_month_plan import generate as generate_business_month_plan
 from generators.policy_revision import generate as generate_policy_revision
+from generators.resource_plans import SPECS as RESOURCE_PLAN_SPECS
+from generators.resource_plans import generate as generate_resource_plan
 from lark_client import LarkClient
 
 
@@ -82,6 +84,38 @@ def confirm_business_month_plan_generation(config: dict, month: int) -> bool:
     return answer == "y"
 
 
+def confirm_resource_plan_generation(config: dict, plan: str, month: int) -> bool:
+    spec = RESOURCE_PLAN_SPECS[plan]
+    section = config[spec.config_key]
+    source_month = section.get("source_month") or month - 1
+    print("")
+    print("即将执行：")
+    print(f"- 生成工作表：{spec.display_name}-{month}月")
+    print(f"- 所在表格 token：{section.get('spreadsheet_token')}")
+    print(f"- 源 sheet：{source_month}月")
+    print(f"- 目标 sheet：{month}月")
+    print(f"- 将更新月份标签：{spec.month_label_cell}")
+    print("- 将写入上游引用和方针引用公式")
+    print(f"- 将清空人工填写区：{spec.clear_range}")
+    answer = input("是否继续？输入 Y 继续，其他任意键取消: ").strip().lower()
+    return answer == "y"
+
+
+def run_resource_plan_flow(config: dict, plan: str, default_month: int | None) -> None:
+    spec = RESOURCE_PLAN_SPECS[plan]
+    config = ensure_policy_revision_config(config)
+    config = ensure_resource_plan_config(config, spec.config_key)
+    section = config.setdefault(spec.config_key, {})
+    month = ask_month(section.get("target_month") or default_month)
+    section["target_month"] = month
+    save_config(config)
+    if not confirm_resource_plan_generation(config, plan, month):
+        print("已取消。")
+        return
+    result = generate_resource_plan(config, plan=plan, month=month)
+    print_result(result)
+
+
 def menu() -> int:
     while True:
         config = ensure_config_exists()
@@ -92,6 +126,9 @@ def menu() -> int:
         print("=== 业绩表格生成工具 ===")
         print("1. 生成经营方针修正-X月")
         print("2. 生成事业年月计划-X月")
+        print("3. 生成事业资源分配计划-X月")
+        print("4. 生成营销资源分配计划-X月")
+        print("5. 生成研发资源分配计划-X月")
         print("8. 按需重新配置链接")
         print("9. 检查环境和飞书授权")
         print("0. 退出")
@@ -116,6 +153,12 @@ def menu() -> int:
                 continue
             result = generate_business_month_plan(config, month=month)
             print_result(result)
+        elif choice == "3":
+            run_resource_plan_flow(config, "business", default_month)
+        elif choice == "4":
+            run_resource_plan_flow(config, "marketing", default_month)
+        elif choice == "5":
+            run_resource_plan_flow(config, "rd", default_month)
         elif choice == "8":
             config = run_config_wizard()
             print("配置完成。")
@@ -139,6 +182,10 @@ def main() -> int:
     business_parser = subparsers.add_parser("generate-business-month")
     business_parser.add_argument("--month", type=int)
     business_parser.add_argument("--force-copy", action="store_true")
+    resource_parser = subparsers.add_parser("generate-resource")
+    resource_parser.add_argument("plan", choices=sorted(RESOURCE_PLAN_SPECS))
+    resource_parser.add_argument("--month", type=int)
+    resource_parser.add_argument("--force-copy", action="store_true")
 
     args = parser.parse_args()
 
@@ -172,6 +219,22 @@ def main() -> int:
             print("已取消。")
             return 1
         result = generate_business_month_plan(config, month=month, force_copy=args.force_copy)
+        print_result(result)
+        return 0
+    if args.command == "generate-resource":
+        config = ensure_config_exists()
+        spec = RESOURCE_PLAN_SPECS[args.plan]
+        config = ensure_policy_revision_config(config)
+        config = ensure_resource_plan_config(config, spec.config_key)
+        month = args.month or config.get(spec.config_key, {}).get("target_month")
+        if not month:
+            month = ask_month()
+        config.setdefault(spec.config_key, {})["target_month"] = month
+        save_config(config)
+        if not confirm_resource_plan_generation(config, args.plan, month):
+            print("已取消。")
+            return 1
+        result = generate_resource_plan(config, plan=args.plan, month=month, force_copy=args.force_copy)
         print_result(result)
         return 0
     return menu()

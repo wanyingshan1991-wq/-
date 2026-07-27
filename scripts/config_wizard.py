@@ -131,12 +131,18 @@ def is_config_valid(config: dict[str, Any]) -> bool:
 def print_config_summary(config: dict[str, Any]) -> None:
     policy = config.get("policy_revision", {})
     business = config.get("business_month_plan", {})
+    business_resource = config.get("business_resource_plan", {})
+    marketing_resource = config.get("marketing_resource_plan", {})
+    rd_resource = config.get("rd_resource_plan", {})
     print("")
     print("当前配置摘要：")
     print(f"- 飞书域名：{config.get('feishu_domain') or '(未配置)'}")
     print(f"- 方针修正文件夹 token：{policy.get('folder_token') or '(未配置)'}")
     print(f"- 方针修正源表 token：{policy.get('source_token') or '(未配置)'}")
     print(f"- 事业年月计划表 token：{business.get('spreadsheet_token') or '(未配置)'}")
+    print(f"- 事业资源分配计划表 token：{business_resource.get('spreadsheet_token') or '(未配置)'}")
+    print(f"- 营销资源分配计划表 token：{marketing_resource.get('spreadsheet_token') or '(未配置)'}")
+    print(f"- 研发资源分配计划表 token：{rd_resource.get('spreadsheet_token') or '(未配置)'}")
 
 
 def run_config_wizard() -> dict[str, Any]:
@@ -214,6 +220,39 @@ def ensure_business_month_plan_config(config: dict[str, Any]) -> dict[str, Any]:
     sheet_input = ask_required("请粘贴“事业年月计划”表格链接或 spreadsheet_token", section.get("spreadsheet_token", ""))
     section["spreadsheet_token"] = extract_token(sheet_input, "sheet")
     save_config(config)
+    return config
+
+
+def ensure_sheet_section_config(config: dict[str, Any], section_key: str, display_name: str) -> dict[str, Any]:
+    config = ensure_feishu_domain(config)
+    section = config.setdefault(section_key, {})
+    if not is_placeholder(section.get("spreadsheet_token")):
+        return config
+
+    print("")
+    print(f"首次生成{display_name}，需要提供这张表的飞书链接。")
+    print("以后会自动保存到本机 config/config.json，同一台电脑不用重复输入。")
+    sheet_input = ask_required(f"请粘贴“{display_name}”表格链接或 spreadsheet_token", section.get("spreadsheet_token", ""))
+    section["spreadsheet_token"] = extract_token(sheet_input, "sheet")
+    save_config(config)
+    return config
+
+
+def ensure_resource_plan_config(config: dict[str, Any], plan_key: str) -> dict[str, Any]:
+    display_names = {
+        "business_resource_plan": "事业资源分配计划",
+        "marketing_resource_plan": "营销资源分配计划",
+        "rd_resource_plan": "研发资源分配计划",
+    }
+    if plan_key not in display_names:
+        raise RuntimeError(f"未知资源分配计划配置：{plan_key}")
+    config = ensure_sheet_section_config(config, plan_key, display_names[plan_key])
+
+    if plan_key == "business_resource_plan":
+        config = ensure_business_month_plan_config(config)
+    else:
+        config = ensure_sheet_section_config(config, "business_resource_plan", "事业资源分配计划")
+
     return config
 
 

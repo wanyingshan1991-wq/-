@@ -12,5 +12,20 @@
     "spreadsheet_token": "",
     "source_month": null,
     "target_month": null
+  },
+  "business_resource_plan": {
+    "spreadsheet_token": "",
+    "source_month": null,
+    "target_month": null
+  },
+  "marketing_resource_plan": {
+    "spreadsheet_token": "",
+    "source_month": null,
+    "target_month": null
+  },
+  "rd_resource_plan": {
+    "spreadsheet_token": "",
+    "source_month": null,
+    "target_month": null
   }
 }
