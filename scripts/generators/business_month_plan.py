@@ -27,7 +27,9 @@ def get_sheet_id(client: LarkClient, spreadsheet_token: str, sheet_name: str) ->
 
 
 def set_actual_rows_white(client: LarkClient, spreadsheet_token: str, sheet_id: str, month: int) -> None:
-    end_column = month_end_column(month)
+    if month <= 1:
+        return
+    end_column = month_end_column(month - 1)
     for row in WHITE_ROWS:
         client.set_background(spreadsheet_token, sheet_id, f"E{row}:{end_column}{row}", "#ffffff")
 
@@ -42,7 +44,9 @@ def clear_manual_cells(client: LarkClient, spreadsheet_token: str, sheet_id: str
 
 
 def set_completion_formulas(client: LarkClient, spreadsheet_token: str, sheet_id: str, month: int) -> None:
-    end_column = month_end_column(month)
+    if month <= 1:
+        return
+    end_column = month_end_column(month - 1)
     for plan_row, adjusted_row, actual_row in COMPLETION_ROWS:
         client.set_cells(
             spreadsheet_token,

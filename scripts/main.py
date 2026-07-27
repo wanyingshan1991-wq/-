@@ -98,8 +98,8 @@ def confirm_business_month_plan_generation(config: dict, month: int) -> bool:
     print(f"- 所在表格 token：{section.get('spreadsheet_token')}")
     print(f"- 源 sheet：{source_month}月")
     print(f"- 目标 sheet：{month}月")
-    print("- 将设置 Row 6/9/13 的 1月到目标月为白色")
-    print("- 将更新 R/S/T 完成率公式，并清空 E14/E15")
+    print("- 将设置 Row 6/9/13 的 1月到目标月前一月为白色")
+    print("- 将更新 R/S/T 完成率公式，统计到目标月前一月，并清空 E14/E15")
     answer = input("是否继续？输入 Y 继续，其他任意键取消: ").strip().lower()
     return answer == "y"
 
@@ -262,14 +262,10 @@ def run_all_core_flow(config: dict, default_month: int | None) -> None:
     print("统一生成完成。")
 
 
-def menu() -> int:
+def run_single_table_menu(config: dict, default_month: int | None) -> None:
     while True:
-        config = ensure_config_exists()
-        policy = config.get("policy_revision", {})
-        default_month = policy.get("target_month")
-
         print("")
-        print("=== 业绩表格生成工具 ===")
+        print("=== 生成单个表格 ===")
         print("1. 生成经营方针修正-X月")
         print("2. 生成事业年月计划-X月")
         print("3. 生成事业资源分配计划-X月")
@@ -277,10 +273,7 @@ def menu() -> int:
         print("5. 生成研发资源分配计划-X月")
         print("6. 生成个人月周推移计划-姓名-X月")
         print("7. 生成个人周日推移计划-姓名-X月")
-        print("8. 统一生成X月核心表格")
-        print("88. 按需重新配置链接")
-        print("9. 检查环境和飞书授权")
-        print("0. 退出")
+        print("0. 返回主菜单")
         choice = input("请输入选项: ").strip()
 
         if choice == "1":
@@ -312,12 +305,31 @@ def menu() -> int:
             run_personal_month_flow(config, default_month)
         elif choice == "7":
             run_personal_week_day_flow(config, default_month)
-        elif choice == "8":
+        elif choice == "0":
+            return
+        else:
+            print("无效选项，请重新输入。")
+
+
+def menu() -> int:
+    while True:
+        config = ensure_config_exists()
+        policy = config.get("policy_revision", {})
+        default_month = policy.get("target_month")
+
+        print("")
+        print("=== 业绩表格生成工具 ===")
+        print("1. 统一生成X月所有表格")
+        print("2. 生成单个表格")
+        print("3. 检查环境和飞书授权")
+        print("0. 退出")
+        choice = input("请输入选项: ").strip()
+
+        if choice == "1":
             run_all_core_flow(config, default_month)
-        elif choice == "88":
-            config = run_config_wizard()
-            print("配置完成。")
-        elif choice == "9":
+        elif choice == "2":
+            run_single_table_menu(config, default_month)
+        elif choice == "3":
             check_environment()
         elif choice == "0":
             return 0
