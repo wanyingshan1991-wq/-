@@ -7,5 +7,10 @@
     "source_name": "",
     "source_token": "",
     "target_month": null
+  },
+  "business_month_plan": {
+    "spreadsheet_token": "",
+    "source_month": null,
+    "target_month": null
   }
 }

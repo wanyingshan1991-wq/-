@@ -33,13 +33,11 @@ def load_example_config() -> dict[str, Any]:
 
 def ensure_config_exists() -> dict[str, Any]:
     if DEFAULT_CONFIG_PATH.exists():
-        config = load_config(DEFAULT_CONFIG_PATH)
-        if is_config_valid(config):
-            return config
-        print("检测到配置不完整，将进入配置向导。")
-        return run_config_wizard()
-    print("未找到 config/config.json，将进入首次配置向导。")
-    return run_config_wizard()
+        return load_config(DEFAULT_CONFIG_PATH)
+    print("未找到 config/config.json，将创建本地配置文件。")
+    config = load_example_config() if EXAMPLE_CONFIG_PATH.exists() else {}
+    save_config(config)
+    return config
 
 
 def extract_token(value: str, kind: str) -> str:
@@ -132,14 +130,13 @@ def is_config_valid(config: dict[str, Any]) -> bool:
 
 def print_config_summary(config: dict[str, Any]) -> None:
     policy = config.get("policy_revision", {})
+    business = config.get("business_month_plan", {})
     print("")
     print("当前配置摘要：")
     print(f"- 飞书域名：{config.get('feishu_domain') or '(未配置)'}")
-    print(f"- 目标文件夹 token：{policy.get('folder_token') or '(未配置)'}")
-    print(f"- 源月份：{policy.get('source_month') or '(未配置)'}")
-    print(f"- 源表名称：{policy.get('source_name') or '(未配置)'}")
-    print(f"- 源表 token：{policy.get('source_token') or '(未配置)'}")
-    print(f"- 默认目标月份：{policy.get('target_month') or '(未配置)'}")
+    print(f"- 方针修正文件夹 token：{policy.get('folder_token') or '(未配置)'}")
+    print(f"- 方针修正源表 token：{policy.get('source_token') or '(未配置)'}")
+    print(f"- 事业年月计划表 token：{business.get('spreadsheet_token') or '(未配置)'}")
 
 
 def run_config_wizard() -> dict[str, Any]:
@@ -193,6 +190,41 @@ def run_config_wizard() -> dict[str, Any]:
     print("")
     print(f"配置已保存：{DEFAULT_CONFIG_PATH}")
     return current
+
+
+def ensure_feishu_domain(config: dict[str, Any]) -> dict[str, Any]:
+    if not is_placeholder(config.get("feishu_domain")):
+        return config
+    sample_domain = "https://gw8xslpm5z.feishu.cn"
+    domain_input = ask_required("请输入飞书域名，或任意飞书表格/文件夹链接", sample_domain)
+    config["feishu_domain"] = extract_domain(domain_input, sample_domain)
+    save_config(config)
+    return config
+
+
+def ensure_business_month_plan_config(config: dict[str, Any]) -> dict[str, Any]:
+    config = ensure_feishu_domain(config)
+    section = config.setdefault("business_month_plan", {})
+    if not is_placeholder(section.get("spreadsheet_token")):
+        return config
+
+    print("")
+    print("首次生成事业年月计划，需要提供这张表的飞书链接。")
+    print("以后会自动保存到本机 config/config.json，同一台电脑不用重复输入。")
+    sheet_input = ask_required("请粘贴“事业年月计划”表格链接或 spreadsheet_token", section.get("spreadsheet_token", ""))
+    section["spreadsheet_token"] = extract_token(sheet_input, "sheet")
+    save_config(config)
+    return config
+
+
+def ensure_policy_revision_config(config: dict[str, Any]) -> dict[str, Any]:
+    errors = validate_config(config)
+    if not errors:
+        return config
+
+    print("")
+    print("生成经营方针修正需要先补充相关链接。")
+    return run_config_wizard()
 
 
 def reset_config_from_example() -> None:

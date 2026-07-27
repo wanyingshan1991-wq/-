@@ -24,10 +24,10 @@ if errorlevel 1 (
 lark-cli --version
 
 echo.
-echo [3/4] Running configuration wizard...
-python "scripts\main.py" configure
+echo [3/4] Preparing local config...
+python -c "from scripts.config_wizard import ensure_config_exists; ensure_config_exists()"
 if errorlevel 1 (
-  echo Configuration failed.
+  echo Failed to prepare local config.
   pause
   exit /b 1
 )
@@ -43,5 +43,6 @@ if errorlevel 1 (
 
 echo.
 echo First-time setup is complete.
+echo Links are requested when you generate each sheet.
 echo You can now use the desktop shortcut: 业绩表格生成工具
 pause

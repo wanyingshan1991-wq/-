@@ -98,6 +98,39 @@ class LarkClient:
     def workbook_info(self, spreadsheet_token: str) -> dict[str, Any]:
         return self.run(["sheets", "+workbook-info", "--spreadsheet-token", spreadsheet_token])
 
+    def copy_worksheet(self, spreadsheet_token: str, source_sheet_name: str, target_sheet_name: str) -> dict[str, Any]:
+        return self.run(
+            [
+                "sheets",
+                "+sheet-copy",
+                "--spreadsheet-token",
+                spreadsheet_token,
+                "--sheet-name",
+                source_sheet_name,
+                "--title",
+                target_sheet_name,
+                "--index",
+                "0",
+            ]
+        )
+
+    def set_cells(self, spreadsheet_token: str, sheet_id: str, range_a1: str, cells: list[list[dict[str, Any]]]) -> None:
+        self.run(
+            [
+                "sheets",
+                "+cells-set",
+                "--spreadsheet-token",
+                spreadsheet_token,
+                "--sheet-id",
+                sheet_id,
+                "--range",
+                range_a1,
+                "--cells",
+                "-",
+            ],
+            stdin=cells,
+        )
+
     def set_background(self, spreadsheet_token: str, sheet_id: str, range_a1: str, color: str) -> None:
         self.run(
             [

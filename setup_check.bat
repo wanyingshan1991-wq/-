@@ -35,7 +35,7 @@ echo [4/4] Checking config
 if exist "config\config.json" (
   echo Found config\config.json
 ) else (
-  echo config\config.json was not found. Copy config\config.example.json to config\config.json before first use.
+  echo config\config.json was not found. Run first_time_setup.bat or start the tool once.
 )
 
 echo.
